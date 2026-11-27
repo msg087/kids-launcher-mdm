@@ -6,6 +6,8 @@ import com.kidslauncher.mdm.server.dto.PlaySignInResponse
 import com.kidslauncher.mdm.server.dto.BrowserHistoryUpload
 import com.kidslauncher.mdm.server.dto.CommandResultRequest
 import com.kidslauncher.mdm.server.dto.DirectDownloads
+import com.kidslauncher.mdm.server.dto.DiscoverApp
+import com.kidslauncher.mdm.server.dto.DiscoverRequest
 import com.kidslauncher.mdm.server.dto.DnsBlocklistCategory
 import com.kidslauncher.mdm.server.dto.DnsEventReport
 import com.kidslauncher.mdm.server.dto.EnrollRequest
@@ -29,6 +31,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 import retrofit2.http.Streaming
 import retrofit2.http.Url
 import java.util.concurrent.TimeUnit
@@ -65,6 +68,24 @@ interface MdmApi {
     /** Server v0.24.0+ - only accepted while the parent has "Sign in using a phone" open. */
     @POST("api/devices/play-signin")
     suspend fun playSignIn(@Body request: PlaySignInRequest): Response<PlaySignInResponse>
+
+    /**
+     * Kid-facing app discovery. The server scopes catalog results and Play requests to this
+     * bearer-authenticated device; it deliberately never gives the launcher Play credentials.
+     */
+    @GET("api/devices/discover")
+    suspend fun discoverApps(
+        @Query("q") query: String,
+        @Query("source") source: String,
+    ): Response<List<DiscoverApp>>
+
+    /**
+     * Requests the server-side action for an app selected from [discoverApps]. Catalog entries
+     * install automatically; Play entries become a parent approval request. A 204 means the
+     * result is no longer available.
+     */
+    @POST("api/devices/discover")
+    suspend fun requestDiscoveredApp(@Body request: DiscoverRequest): Response<DiscoverApp>
 
     @POST("api/devices/locked-report")
     suspend fun sendLockedReport(@Body report: LockedReportRequest): Response<Unit>

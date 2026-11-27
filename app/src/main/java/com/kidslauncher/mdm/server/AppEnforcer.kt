@@ -87,6 +87,27 @@ internal fun controllablePackages(context: Context): List<String> {
 }
 
 /**
+ * Last-moment gate shared by every launcher app tap. Package suspension is Android's immediate
+ * enforcement for both app groups and the allowlist; the cached policy check additionally closes
+ * the tiny window before a new restriction's Binder update lands.
+ */
+fun canLaunchChildApp(context: Context, packageName: String): Boolean {
+    return try {
+        reevaluateLockReasonFromCache(context)
+        if (LauncherPreferences.mdm().lockReason() != LockReason.NONE) return false
+        if (OfflineOverride.isActive() || LauncherPreferences.mdm().restrictionsPaused()) return true
+
+        val policy = cachedPolicy()
+        val allowed = policy?.allowlist?.takeIf { it.isNotEmpty() }
+        if (allowed != null && packageName !in allowed) return false
+        if (packageName in AppGroups.evaluate(context, policy).blockedPackages) return false
+        !context.packageManager.isPackageSuspended(packageName)
+    } catch (_: Exception) {
+        false
+    }
+}
+
+/**
  * Packages that must never be hidden/suspended so the phone can always finish booting: none, as
  * long as this app's own [HomeActivity] is direct-boot-aware (v0.51.0+) - it then resolves as HOME
  * before the first unlock by itself, so nothing else needs to. Otherwise, every
@@ -155,10 +176,10 @@ internal fun homeProviderPackages(pm: PackageManager): Set<String> {
  */
 object AppEnforcer {
 
-    fun apply(context: Context, policy: PolicyResponse?) {
+    fun apply(context: Context, policy: PolicyResponse?): List<com.kidslauncher.mdm.server.dto.PermissionResult> {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         if (!dpm.isDeviceOwnerApp(context.packageName)) {
-            return
+            return PermissionPolicyEnforcer.apply(context, policy?.permissionPolicy)
         }
         val admin = ComponentName(context, MdmDeviceAdminReceiver::class.java)
 
@@ -202,6 +223,14 @@ object AppEnforcer {
         applySideloadRestriction(dpm, admin, blockSideloading = !overrideActive)
 
         applyBrowserPolicy(dpm, admin, context, locked = !overrideActive)
+
+        // Permission denials/grants are distinct from schedule/visibility restrictions: an
+        // offline override never temporarily lifts an explicit parent runtime denial. Hardware
+        // camera/microphone restrictions likewise always follow the actual parent policy.
+        return PermissionPolicyEnforcer.apply(
+            context,
+            policy?.permissionPolicy,
+        )
     }
 
     /**
@@ -637,6 +666,13 @@ object AppEnforcer {
         if (!dpm.isDeviceOwnerApp(context.packageName)) return
         if (packageName == context.packageName) return
         if (packageName in bootExemptPackages(context)) return
+        // Package install/update callbacks converge permission overrides without waiting for the
+        // next server heartbeat. The policy is locally cached and therefore works offline too.
+        PermissionPolicyEnforcer.enforcePackage(
+            context,
+            packageName,
+            cachedPolicy()?.permissionPolicy,
+        )
         if (OfflineOverride.isActive() || LauncherPreferences.mdm().restrictionsPaused()) return
 
         val allowedPackages = cachedPolicy()?.allowlist?.takeIf { it.isNotEmpty() }?.toSet() ?: return

@@ -26,6 +26,7 @@ import com.kidslauncher.mdm.apps.DetailedAppInfo
 import com.kidslauncher.mdm.preferences.LauncherPreferences
 import com.kidslauncher.mdm.ui.list.AbstractListActivity
 import com.kidslauncher.mdm.ui.list.AppListActivity
+import com.kidslauncher.mdm.ui.discover.DiscoverAppsActivity
 import com.kidslauncher.mdm.ui.settings.SettingsActivity
 
 
@@ -108,6 +109,11 @@ fun openAppsList(
     )
 
     context.startActivity(intent)
+}
+
+/** Opens the child-facing catalog/Google Play finder. This is intentionally not Settings-gated. */
+fun openDiscoverApps(context: Context) {
+    context.startActivity(Intent(context, DiscoverAppsActivity::class.java))
 }
 
 fun getUserFromId(userId: Int?, context: Context): UserHandle {
@@ -204,4 +210,3 @@ fun copyToClipboard(context: Context, text: String) {
     val clipData = ClipData.newPlainText("Debug Info", text)
     clipboardManager.setPrimaryClip(clipData)
 }
-

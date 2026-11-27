@@ -7,8 +7,10 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.core.view.isVisible
 import com.kidslauncher.mdm.apps.AppFilter
 import com.kidslauncher.mdm.databinding.ListAppsBinding
+import com.kidslauncher.mdm.openDiscoverApps
 import com.kidslauncher.mdm.preferences.LauncherPreferences
 import com.kidslauncher.mdm.ui.UIObject
 import com.kidslauncher.mdm.ui.list.AbstractListActivity
@@ -34,6 +36,7 @@ class ListFragmentApps : Fragment(), UIObject {
         savedInstanceState: Bundle?
     ): View {
         binding = ListAppsBinding.inflate(inflater)
+        binding.listFindApps.setOnClickListener { openDiscoverApps(requireContext()) }
         return binding.root
     }
 
@@ -42,6 +45,7 @@ class ListFragmentApps : Fragment(), UIObject {
         super<UIObject>.onStart()
         LauncherPreferences.getSharedPreferences()
             .registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
+        binding.listFindApps.isVisible = LauncherPreferences.mdm().enrolled()
     }
 
     override fun onStop() {

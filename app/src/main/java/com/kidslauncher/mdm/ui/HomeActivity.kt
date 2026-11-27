@@ -15,6 +15,7 @@ import android.view.MotionEvent
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.kidslauncher.mdm.Application
@@ -24,6 +25,7 @@ import com.kidslauncher.mdm.server.LockReason
 import com.kidslauncher.mdm.server.TsnetClient
 import com.kidslauncher.mdm.server.reevaluateLockReasonFromCache
 import com.kidslauncher.mdm.openAppsList
+import com.kidslauncher.mdm.openDiscoverApps
 import com.kidslauncher.mdm.preferences.LauncherPreferences
 import com.kidslauncher.mdm.requestNotificationPermission
 import com.kidslauncher.mdm.setDefaultHomeScreen
@@ -109,6 +111,8 @@ class HomeActivity : UIObjectActivity() {
         minimalistAdapter = MinimalistHomeAdapter(this)
         binding.homeMinimalistList.layoutManager = LinearLayoutManager(this)
         binding.homeMinimalistList.adapter = minimalistAdapter
+        binding.homeFindApps.setOnClickListener { openDiscoverApps(this@HomeActivity) }
+        binding.homeFindApps.isVisible = LauncherPreferences.mdm().enrolled()
 
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onFling(
@@ -233,6 +237,9 @@ class HomeActivity : UIObjectActivity() {
         // Checked here (not just via the preference listener) so pressing Home while the lock
         // screen is showing can't be used to bounce back into the drawer/home list underneath it.
         if (redirectToLockScreenIfLocked()) return
+        // This remains independently reachable when no minimalist apps can be loaded, but isn't
+        // meaningful until this phone has a server-backed family catalog.
+        binding.homeFindApps.isVisible = LauncherPreferences.mdm().enrolled()
         minimalistAdapter.updateAppsList()
     }
 

@@ -142,6 +142,30 @@
       -->
     <string name="list_title_view">All Apps</string>
     <string name="list_title_hidden">Hidden Apps</string>
+    <string name="find_apps">Find apps</string>
+    <string name="find_apps_title">Find apps</string>
+    <string name="find_apps_search_hint">Search for apps</string>
+    <string name="find_apps_catalog">Catalog</string>
+    <string name="find_apps_play">Google Play</string>
+    <string name="find_apps_search">Search</string>
+    <string name="find_apps_requests">My requests</string>
+    <string name="find_apps_refresh">Refresh</string>
+    <string name="find_apps_requests_empty">No requests yet. Search Google Play and tap Ask parent to request an app.</string>
+    <string name="find_apps_requests_note">Recent requests from this phone. Approval does not mean the app has finished installing.</string>
+    <string name="find_apps_approved">Approved</string>
+    <string name="find_apps_waiting">Waiting for parent</string>
+    <string name="find_apps_declined">Not approved</string>
+    <string name="find_apps_empty">No apps found.</string>
+    <string name="find_apps_failed">Couldn’t reach the server. Try again.</string>
+    <string name="find_apps_play_query_required">Type an app name to search Google Play.</string>
+    <string name="find_apps_offline_installed">Server unavailable. Showing installed apps only.</string>
+    <string name="find_apps_installed_offline">Installed on this phone</string>
+    <string name="find_apps_install">Install</string>
+    <string name="find_apps_ask">Ask parent</string>
+    <string name="find_apps_asked">Asked parent</string>
+    <string name="find_apps_installing">Installing…</string>
+    <string name="find_apps_denied">Not allowed</string>
+    <string name="find_apps_open">Open</string>
 
     <string name="list_app_hidden_add">Hide</string>
     <string name="list_app_hidden_remove">Show</string>

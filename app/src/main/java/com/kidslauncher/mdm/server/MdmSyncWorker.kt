@@ -115,7 +115,7 @@ suspend fun performMdmSync(context: Context): Boolean = syncMutex.withLock {
     }
     mdm.lockReason(reason)
 
-    AppEnforcer.apply(context, policy)
+    val permissionResults = AppEnforcer.apply(context, policy)
 
     // A `ring`/`locate` command means the admin explicitly wants to know where the device is right
     // now, worth the cost of an active GPS/network fix - every other sync (the background chain,
@@ -137,6 +137,7 @@ suspend fun performMdmSync(context: Context): Boolean = syncMutex.withLock {
                 location = currentLocationReport(context, dpm, admin, forceFreshLocation),
                 usageAccessGranted = AppGroups.hasUsageAccess(context),
                 appGroupUsage = AppGroups.usageReport(context, policy),
+                permissionResults = permissionResults,
             )
         )
         // The report just landed, so this doesn't need to stay pending - if it was never used,

@@ -113,6 +113,11 @@
             android:configChanges="orientation|screenSize"
             android:windowSoftInputMode="adjustResize" />
         <activity
+            android:name=".ui.discover.DiscoverAppsActivity"
+            android:configChanges="orientation|screenSize"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name=".ui.settings.SettingsActivity"
             android:configChanges="orientation|screenSize"
             android:exported="true"

@@ -84,6 +84,13 @@ class Application : android.app.Application() {
 
         override fun onPackageChanged(p0: String?, p1: UserHandle?) {
             loadApps()
+            // Updates can add/remove dangerous permissions, so run the same convergence path as a
+            // fresh install. Device-policy Binder calls stay off the main callback thread.
+            p0?.let { packageName ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    AppEnforcer.enforceOnNewPackage(this@Application, packageName)
+                }
+            }
         }
 
         override fun onPackagesAvailable(p0: Array<out String>?, p1: UserHandle?, p2: Boolean) {
@@ -180,7 +187,9 @@ class Application : android.app.Application() {
 
         // First time opening the app: set defaults
         // (the rest of first-launch setup happens in HomeActivity#onStart)
-        if (!LauncherPreferences.internal().started()) {
+        // Enrollment can finish in Settings or the provisioning wizard before HOME is
+        // ever opened. A later package update must not erase its token or cached policy.
+        if (!LauncherPreferences.internal().started() && !LauncherPreferences.mdm().enrolled()) {
             resetPreferences(this)
         }
 

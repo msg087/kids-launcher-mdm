@@ -61,4 +61,20 @@ data class PolicyResponse(
     val lockOverrideUntilMs: Long? = null,
     val appGroups: List<AppGroupPolicy> = emptyList(),
     val vpnBypassPackages: List<String> = emptyList(),
+    /** Runtime-permission and hardware policy enforced by the Device Owner. */
+    val permissionPolicy: PermissionPolicy? = null,
+)
+
+/**
+ * `defaults` applies to every safe, user-facing installed app that declares the named dangerous
+ * permission; `apps` then overrides that result for one such app. The launcher and headless/core
+ * system packages are deliberately outside this broad scope (see PermissionPolicyEnforcer).
+ */
+@Serializable
+data class PermissionPolicy(
+    val defaultState: String = "default",
+    val cameraDisabled: Boolean = false,
+    val microphoneDisabled: Boolean = false,
+    val defaults: Map<String, String> = emptyMap(),
+    val apps: Map<String, Map<String, String>> = emptyMap(),
 )
