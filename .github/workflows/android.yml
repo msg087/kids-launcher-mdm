@@ -1,124 +1,32 @@
 name: Kids MDM Launcher
-
 on:
   workflow_dispatch:
-  push:
-    branches: [ "master" ]
   pull_request:
-    branches: [ "master" ]
-
+    branches: [master]
+permissions:
+  contents: read
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
-
-    - name: set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-    - name: Install Android NDK
-      run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.1.13356709"
-    - name: Build tsnet.aar with gomobile
-      # tsnet (tailscale.com/tsnet) gives the launcher its own embeddable tailnet
-      # connection - see this repo's CLAUDE.md for why (replaces the standalone
-      # Tailscale app + the DoT-to-Pi Private DNS approach). Binds against
-      # mobile/tsembed, a thin wrapper (not tsnet.Server directly - gobind can't
-      # generate bindings for tsnet.Server's own methods, several of which return
-      # more values than gobind supports; see mobile/tsembed's package doc).
-      # gomobile compiles it (and its transitive deps - WireGuard, the userspace
-      # netstack, etc.) into an Android-consumable .aar; app/build.gradle.kts
-      # references the output by path. arm64-only since that's the only
-      # architecture either test device needs - see CLAUDE.md if that ever needs
-      # to change.
-      run: |
-        export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.1.13356709"
-        go install golang.org/x/mobile/cmd/gomobile@latest
-        go install golang.org/x/mobile/cmd/gobind@latest
-        mkdir -p app/libs
-        cd mobile
-        go get tailscale.com/tsnet@latest
-        # Works around a real, currently-open upstream gap (tailscale/tailscale#17311):
-        # tsnet.Server.Start calls Go's net.Interfaces() internally, which Android's
-        # SELinux policy blocks for unprivileged apps - see tsembed.go's init().
-        go get github.com/wlynxg/anet@latest
-        # Go 1.24+ requires a build tool to be an explicit `tool` dependency in
-        # go.mod, not just globally `go install`'d - gomobile bind builds
-        # generated glue code inside this module's context, so it needs
-        # golang.org/x/mobile declared here too, not just on the CI runner's PATH.
-        go get -tool golang.org/x/mobile/cmd/gobind
-        gomobile init
-        # -checklinkname=0: anet uses //go:linkname internally (a low-level Go
-        # runtime linking mechanism) which Go 1.23+ restricts by default unless
-        # explicitly allowed - see github.com/wlynxg/anet's own build notes.
-        gomobile bind -o ../app/libs/tsnet.aar -target="$ANDROID_TARGETS" -androidapi 34 -ldflags="-checklinkname=0" ./tsembed
-      env:
-        ANDROID_TARGETS: ${{ github.event_name == 'workflow_dispatch' && 'android/arm,android/arm64,android/amd64' || 'android/arm64' }}
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    - name: Read Release Keystore
-      # Shared Kids MDM release key (also signs kids-mdm-im and kids-mdm-browser) - see
-      # app/build.gradle.kts's signingConfigs. Master only, so PR builds never see the key.
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-      run: |
-        echo "$RELEASE_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.p12"
-        echo "RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
-      env:
-        RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
-    - name: Build with Gradle
-      if: github.event_name != 'workflow_dispatch'
-      run: ./gradlew build
-      env:
-        RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-        RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-    - name: Build and test manual debug APK
-      if: github.event_name == 'workflow_dispatch'
-      run: ./gradlew :app:assembleDebug :app:testDebugUnitTest
-    - name: Clean up keystore
-      if: always()
-      run: rm -f "$RUNNER_TEMP/release.p12"
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: launcher-${{ github.event_name == 'workflow_dispatch' && 'debug' || 'release' }}-${{ github.sha }}.apk
-        path: ${{ github.event_name == 'workflow_dispatch' && 'app/build/outputs/apk/debug/app-debug.apk' || 'app/build/outputs/apk/release/app-release.apk' }}
-    - name: Upload tsnet.aar
-      # Not consumed by anything - purely so the generated gobind Java/Kotlin
-      # API surface can be inspected without a local Go toolchain. Safe to
-      # remove once TsnetClient.kt is written and stable.
-      uses: actions/upload-artifact@v4
-      with:
-        name: tsnet-aar-${{ github.sha }}
-        path: app/libs/tsnet.aar
-
-    - name: Read version
-      id: version
-      run: echo "name=$(grep -m1 'versionName = ' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_OUTPUT"
-    - name: Publish release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-      # A normal (non-prerelease) release per master push, tagged from versionName and marked
-      # latest - so https://github.com/siesta5787/kids-launcher-mdm/releases/latest/download/app-release.apk
-      # (kid-phone-server's provisioning QR) always resolves to the newest build. allowUpdates is
-      # off on purpose: pushing without bumping versionName fails here instead of silently
-      # overwriting an already-published version.
-      uses: ncipollo/release-action@v1
-      with:
-        commit: ${{ github.sha }}
-        tag: v${{ steps.version.outputs.name }}
-        name: v${{ steps.version.outputs.name }}
-        prerelease: false
-        makeLatest: true
-        body: "Package `com.kidslauncher.mdm`, signed with the shared Kids MDM release key."
-        generateReleaseNotes: true
-        artifacts: "app/build/outputs/apk/release/app-release.apk"
-        allowUpdates: false
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: bash .github/build-tsnet.sh
+      - name: Build and test without prd credentials
+        run: |
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            bash gradlew build
+          else
+            bash gradlew :app:assembleDebug :app:testDebugUnitTest
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: launcher-debug-${{ github.sha }}.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tsnet-aar-${{ github.sha }}
+          path: app/libs/tsnet.aar
