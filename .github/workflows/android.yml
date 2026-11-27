@@ -1,6 +1,7 @@
-name: Android CI
+name: Kids MDM Launcher
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "master" ]
   pull_request:
@@ -58,23 +59,29 @@ jobs:
         # -checklinkname=0: anet uses //go:linkname internally (a low-level Go
         # runtime linking mechanism) which Go 1.23+ restricts by default unless
         # explicitly allowed - see github.com/wlynxg/anet's own build notes.
-        gomobile bind -o ../app/libs/tsnet.aar -target=android/arm64 -androidapi 34 -ldflags="-checklinkname=0" ./tsembed
+        gomobile bind -o ../app/libs/tsnet.aar -target="$ANDROID_TARGETS" -androidapi 34 -ldflags="-checklinkname=0" ./tsembed
+      env:
+        ANDROID_TARGETS: ${{ github.event_name == 'workflow_dispatch' && 'android/arm,android/arm64,android/amd64' || 'android/arm64' }}
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Read Release Keystore
       # Shared Kids MDM release key (also signs kids-mdm-im and kids-mdm-browser) - see
       # app/build.gradle.kts's signingConfigs. Master only, so PR builds never see the key.
-      if: github.ref == 'refs/heads/master'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       run: |
         echo "$RELEASE_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.p12"
         echo "RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
       env:
         RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
     - name: Build with Gradle
+      if: github.event_name != 'workflow_dispatch'
       run: ./gradlew build
       env:
         RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
         RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+    - name: Build and test manual debug APK
+      if: github.event_name == 'workflow_dispatch'
+      run: ./gradlew :app:assembleDebug :app:testDebugUnitTest
     - name: Clean up keystore
       if: always()
       run: rm -f "$RUNNER_TEMP/release.p12"
@@ -82,8 +89,8 @@ jobs:
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: launcher-release-${{ github.sha }}.apk
-        path: app/build/outputs/apk/release/app-release.apk
+        name: launcher-${{ github.event_name == 'workflow_dispatch' && 'debug' || 'release' }}-${{ github.sha }}.apk
+        path: ${{ github.event_name == 'workflow_dispatch' && 'app/build/outputs/apk/debug/app-debug.apk' || 'app/build/outputs/apk/release/app-release.apk' }}
     - name: Upload tsnet.aar
       # Not consumed by anything - purely so the generated gobind Java/Kotlin
       # API surface can be inspected without a local Go toolchain. Safe to
@@ -97,7 +104,7 @@ jobs:
       id: version
       run: echo "name=$(grep -m1 'versionName = ' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_OUTPUT"
     - name: Publish release
-      if: github.ref == 'refs/heads/master'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       # A normal (non-prerelease) release per master push, tagged from versionName and marked
       # latest - so https://github.com/siesta5787/kids-launcher-mdm/releases/latest/download/app-release.apk
       # (kid-phone-server's provisioning QR) always resolves to the newest build. allowUpdates is
