@@ -1,0 +1,94 @@
+name: prd APK
+on:
+  push:
+    tags: ['prd-v*']
+
+permissions: {}
+
+jobs:
+  build:
+    if: github.ref_protected && github.repository == 'msg087/kids-launcher-mdm'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Build and test unsigned release
+        run: |
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          [[ "$GITHUB_REF_NAME" =~ ^prd-v[0-9]+(\.[0-9]+)+$ ]]
+          git merge-base --is-ancestor HEAD refs/remotes/origin/master
+          bash .github/build-tsnet.sh
+          bash gradlew :app:testReleaseUnitTest :app:assembleRelease
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unsigned-prd
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: unsigned-prd
+      - name: Check package, version and native architectures
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0"
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          "$tools/aapt" dump badging app-release-unsigned.apk > "$RUNNER_TEMP/badging"
+          python3 - <<'PY'
+          import os, pathlib, re
+          text = (pathlib.Path(os.environ['RUNNER_TEMP']) / 'badging').read_text()
+          package, code, version = re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'", text, re.M).groups()
+          assert package == 'com.kidslauncher.mdm'
+          assert int(code) > 0 and 'prd-v' + version == os.environ['GITHUB_REF_NAME']
+          abis = re.search(r'^native-code: (.+)$', text, re.M).group(1)
+          assert {'armeabi-v7a','arm64-v8a','x86_64'} <= set(re.findall(r"'([^']+)'", abis))
+          PY
+      - name: Sign with existing key and verify signer
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          store=$(mktemp)
+          trap 'rm -f "$store"' EXIT
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$store"
+          unset KEYSTORE_B64
+          signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          "$signer" sign --ks "$store" --ks-key-alias family-release --ks-pass env:STORE_PASSWORD \
+            --key-pass env:STORE_PASSWORD --out app-prd.apk app-release-unsigned.apk
+          unset STORE_PASSWORD
+          "$signer" verify --verbose --print-certs app-prd.apk > "$RUNNER_TEMP/signer"
+          digest=$(sed -n 's/^Signer #[0-9]* certificate SHA-256 digest: //p' "$RUNNER_TEMP/signer")
+          test "$digest" = 7212a57fc358f304fe775f3b227737355afb3f8a08969685e9fb571e6cbb5d8e
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verified-prd
+          path: app-prd.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: sign
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: verified-prd
+      - name: Publish immutable version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" app-prd.apk --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
